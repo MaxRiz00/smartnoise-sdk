@@ -138,6 +138,9 @@ synth_map = {
     'aim': {
         'class': 'snsynth.aim.AIMSynthesizer'
     },
+     'gdpaim': {
+        'class': 'snsynth.aim.gdpAIMSynthesizer'
+    },
 }
 
 class Synthesizer(SDGYMBaseSynthesizer):
