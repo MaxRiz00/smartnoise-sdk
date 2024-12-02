@@ -127,6 +127,7 @@ class gdpAIMSynthesizer(Synthesizer):
         self.num_rows = None
         self.original_column_names = None
 
+
     def fit(
             self,
             data,
@@ -179,6 +180,11 @@ class gdpAIMSynthesizer(Synthesizer):
         workload = self.get_workload(
             data, degree=self.degree, max_cells=self.max_cells, num_marginals=self.num_marginals
         )
+
+
+        self.data = data
+        self.workload = workload
+        
 
         self.gdpAIM(data, workload)
 
@@ -297,12 +303,38 @@ class gdpAIMSynthesizer(Synthesizer):
 
         self.synthesizer = model
 
+
     def get_errors(self, data: Dataset, workload):
         errors = []
+        print("Starting error computation...")  # Debug: Start of the function
+
         for proj, wgt in workload:
-            X = data.project(proj).datavector()
-            Y = self.synthesizer.project(proj).datavector()
-            e = 0.5 * wgt * np.linalg.norm(X / X.sum() - Y / Y.sum(), 1)
-            errors.append(e)
-        print('Average Error: ', np.mean(errors))
-        return errors
+            print(f"Processing Projection: {proj}, Weight: {wgt}")  # Debug: Current projection
+
+            # Debug: Check if projection is valid
+            if not set(proj).issubset(set(data.domain.attrs)):
+                print(f"Projection {proj} not in Data Domain Attributes: {data.domain.attrs}")
+            if not set(proj).issubset(set(self.synthesizer.domain.attrs)):
+                print(f"Projection {proj} not in Synthesizer Domain Attributes: {self.synthesizer.domain.attrs}")
+
+            try:
+                # Extract data vectors for the projection
+                X = data.project(proj).datavector()
+                Y = self.synthesizer.project(proj).datavector()
+
+                # Compute the error for this projection
+                e = 0.5 * wgt * np.linalg.norm(X / X.sum() - Y / Y.sum(), 1)
+                errors.append(e)
+
+                # Debug: Log intermediate results
+                print(f"Projection {proj}: Error = {e}")
+            except Exception as e:
+                # Debug: Log errors during processing
+                print(f"Error with Projection {proj}: {e}")
+                raise e  # Re-raise to stop execution
+
+        # Final summary of errors
+        print("All Projections Processed.")
+        print("Average Error: ", np.mean(errors))  # Debug: Average error across projections
+
+        return np.mean(errors) # errors
