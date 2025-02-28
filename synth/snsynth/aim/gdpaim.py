@@ -14,6 +14,7 @@ from scipy import sparse
 from scipy.stats import norm
 
 
+
 prng = np.random
 
 from scipy.optimize import root_scalar
@@ -35,7 +36,7 @@ def find_mu_for_eps_delta(eps: float, delta: float) -> float:
     
     # Search in reasonable range for mu
     result = root_scalar(objective, 
-                        bracket=[0.1, 100.0],
+                        bracket=[1e-9, 100.0],
                         method='brentq')
     
     return result.root
@@ -236,8 +237,8 @@ class gdpAIMSynthesizer(Synthesizer):
 
         ## GDP sigma,epsilon
         sigma = np.sqrt(rounds/(alpha*self.mu**2))
-        #phi_term = norm.cdf(-np.sqrt((1-alpha)/rounds)*0.5*self.mu)
-        epsilon = np.sqrt((2*(1-alpha)*self.mu**2)/rounds)
+        phi_term = norm.cdf(-np.sqrt((1-alpha)/rounds)*0.5*self.mu)
+        epsilon = 2 *np.log((1/phi_term) -1) 
 
         measurements = []
         print('Initial Sigma', sigma)
@@ -259,18 +260,18 @@ class gdpAIMSynthesizer(Synthesizer):
             t += 1
             # Budget annealing
             # old condition: self.rho - rho_used < 2 * (0.5 / sigma ** 2 + 1.0 / 8 * epsilon ** 2)
-            if self.mu **2 - mu_sq_used < 2* ( 1 / sigma**2 + 0.5*epsilon**2 ) :
+            if self.mu **2 - mu_sq_used < 2* ( 1 / sigma**2 + (-2*norm.ppf(1/(np.exp(epsilon/2) + 1)))**2 ) :
                 # Just use up whatever remaining budget there is for one last round
                 remaining = self.mu **2 - mu_sq_used 
                 #sigma = np.sqrt(1 / (2 * (alpha) * remaining))
                 #epsilon = np.sqrt(8 * (1-alpha) * remaining)
                 sigma = np.sqrt(1/(alpha*remaining))
-                #phi_term = norm.cdf(-np.sqrt((1-alpha))*0.5*np.sqrt(remaining))
-                epsilon = np.sqrt(2*(1-alpha)*remaining)
+                phi_term = norm.cdf(-np.sqrt((1-alpha))*0.5*np.sqrt(remaining))
+                epsilon = 2*np.log(1/(phi_term) - 1)
                 terminate = True
 
             #rho_used += 1.0 / 8 * epsilon ** 2 + 0.5 / sigma ** 2
-            mu_sq_used += 1 / sigma**2 + 0.5 *epsilon**2
+            mu_sq_used += 1 / sigma**2 + (-2*norm.ppf(1/(np.exp(epsilon/2) + 1)))**2
 
             #size_limit = self.max_model_size * rho_used / self.rho
             size_limit = self.max_model_size * mu_sq_used / self.mu**2

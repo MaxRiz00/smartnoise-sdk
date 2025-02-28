@@ -12,6 +12,8 @@ from mbi import Dataset, FactoredInference, Domain
 from snsynth.utils import cdp_rho, exponential_mechanism, gaussian_noise, powerset
 from scipy import sparse
 
+import csv
+
 prng = np.random
 
 
@@ -168,16 +170,35 @@ class AIMSynthesizer(Synthesizer):
     def _worst_approximated(self, candidates, answers, model, eps, sigma):
         errors = {}
         sensitivity = {}
+
         for cl in candidates:
             wgt = candidates[cl]
             x = answers[cl]
             bias = np.sqrt(2 / np.pi) * sigma * model.domain.size(cl)
             xest = model.project(cl).datavector()
+
             errors[cl] = wgt * (np.linalg.norm(x - xest, 1) - bias)
             sensitivity[cl] = abs(wgt)
+            """
+
+            # clip x est to make it bounded
+            xest = np.clip(xest, -model.domain.size(cl) * len(self.data.df), model.domain.size(cl) * len(self.data.df))
+
+            
+
+            for val in x:
+                if(val > len(self.data.df)):
+                    print(len(self.data.df))
+                    print("BAD")
+
+            if(np.linalg.norm(x,1) > (len(self.data.df) *len(x)) ): #model.domain.size(cl)
+                print("size of x: ", len(x))
+                print("N_r: ",model.domain.size(cl) )
+                print("WRONG !!")
+        """
 
         max_sensitivity = max(sensitivity.values())  # if all weights are 0, could be a problem
-        return exponential_mechanism(errors, eps, max_sensitivity)
+        return  errors, exponential_mechanism(errors, eps, max_sensitivity)
 
     def AIM(self, data, workload):
         rounds = self.rounds or 16 * len(data.domain)
@@ -201,9 +222,12 @@ class AIMSynthesizer(Synthesizer):
 
         engine = FactoredInference(data.domain, iters=1000, warm_start=True)
         model = engine.estimate(measurements)
+        #print("Ecco la size:", model.size)
 
         t = 0
         terminate = False
+
+        header = ["r","n_r",'weight','query','bound']
         while not terminate:
             t += 1
             if self.rho - rho_used < 2 * (0.5 / sigma ** 2 + 1.0 / 8 * epsilon ** 2):
@@ -217,7 +241,24 @@ class AIMSynthesizer(Synthesizer):
             size_limit = self.max_model_size * rho_used / self.rho
 
             small_candidates = filter_candidates(candidates, model, size_limit)
-            cl = self._worst_approximated(small_candidates, answers, model, epsilon, sigma)
+            errors, cl = self._worst_approximated(small_candidates, answers, model, epsilon, sigma)
+
+            """
+
+            with open('results_AIM' + str(t) + '.csv', mode='w',newline='') as csvfile:
+                writer= csv.writer(csvfile)
+                writer.writerow(header)
+                for cl_ in small_candidates:
+                    row = [cl_, model.domain.size(cl_), small_candidates[cl_],errors[cl_], model.domain.size(cl_)*small_candidates[cl_]*( len(self.data.df)  + sigma*np.sqrt(2/np.pi)) ]
+                    #check if the bound is correct
+                    if (abs(errors[cl_]) > model.domain.size(cl_)*small_candidates[cl_]*( len(self.data.df)  + sigma*np.sqrt(2/np.pi)) ):
+                        print("Bound not correct")
+                        print("N_r: ",model.domain.size(cl_) )
+                        print("model or size:", model.size)
+                    writer.writerow(row)
+            """
+
+            # save small candidates, errors 
 
             n = data.domain.size(cl)
             Q = Identity(n)
